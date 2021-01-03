@@ -11,6 +11,10 @@ import Canvas from "./Canvas";
 import Card from "@material-ui/core/Card";
 import Container from "@material-ui/core/Container";
 import { useState } from "react";
+import EditIcon from "@material-ui/icons/Edit";
+import FormGroup from '@material-ui/core/FormGroup';
+import FormControlLabel from '@material-ui/core/FormControlLabel';
+import Switch from '@material-ui/core/Switch';
 
 // fix stupid javascript modulo bug
 function mod(n, m) {
@@ -20,15 +24,19 @@ function mod(n, m) {
 // ---- Here is only Game of Life Logic
 
 const GameProperties = {
-  CELLS_X: 100,
-  CELLS_Y: 100,
-}
+  CELLS_X: 20,
+  CELLS_Y: 20,
+};
 
 class Generation {
   constructor(previous_generation = null) {
-    this.cells = this.makeArray(GameProperties.CELLS_X, GameProperties.CELLS_Y, TYPE.DEAD);
+    this.cells = this.makeArray(
+      GameProperties.CELLS_X,
+      GameProperties.CELLS_Y,
+      TYPE.DEAD
+    );
     if (previous_generation) {
-      this.advance(previous_generation);
+      this.advanceFrom(previous_generation);
     }
   }
 
@@ -42,41 +50,44 @@ class Generation {
     }
     return arr;
   }
-  
+
   add_blinker() {
-    this.cells[(3, 2)] = TYPE.NEW;
-    this.cells[(3, 3)] = TYPE.NEW;
-    this.cells[(3, 4)] = TYPE.NEW;
+    // TODO generalize
+    this.cells[3][2] = TYPE.NEW;
+    this.cells[3][3] = TYPE.NEW;
+    this.cells[3][4] = TYPE.NEW;
   }
 
   neighbours(x, y) {
     let n = 0;
-    for (let i = -1; i <= 1; i++)
-      for (let j = -1; j <= 1; j++)
-        if (i !== 0 && j !== 0) {
+    for (let i = -1; i <= 1; i++) {
+      for (let j = -1; j <= 1; j++) {
+        if (!(i === 0 && j === 0)) {
           if (
             this.cells[mod(x + i, GameProperties.CELLS_X)][
-              mod(y + i, GameProperties.CELLS_Y)
+              mod(y + j, GameProperties.CELLS_Y)
             ] === TYPE.NORMAL ||
             this.cells[mod(x + i, GameProperties.CELLS_X)][
-              mod(y + i, GameProperties.CELLS_Y)
+              mod(y + j, GameProperties.CELLS_Y)
             ] === TYPE.NEW
           )
             n++;
         }
+      }
+    }
     return n;
   }
 
-  advance(previous_generation) {
-    for (let x = 0; x < this.cells.length; x++) {
-      for (let y = 0; y < this.cells.length; y++) {
+  advanceFrom(previous_generation) {
+    for (let x = 1; x < this.cells.length; x++) {
+      for (let y = 1; y < this.cells.length; y++) {
         let n = previous_generation.neighbours(x, y);
         if (
           previous_generation.cells[x][y] === undefined ||
           previous_generation.cells[x][y] === TYPE.DEAD ||
           previous_generation.cells[x][y] === TYPE.DYING
         ) {
-          if (n == 3) {
+          if (n === 3) {
             this.cells[x][y] = TYPE.NEW;
           }
         } else {
@@ -97,28 +108,30 @@ class Game {
     this.generations[0] = new Generation();
     this.generations[0].add_blinker();
   }
-  get_latest_generation() {
-    return this.generations[this.generations.length - 1];
+  getLatestGeneration() {
+    return this.getGeneration(this.getGenerationCount());
   }
-  get_generation_count() {
+  getGenerationCount() {
     return this.generations.length;
   }
-  advance() {
-    this.generations[this.generations.length] = new Generation(
-      this.get_latest_generation()
+  getGeneration(num) {
+    return this.generations[num - 1];
+  }
+  advanceGeneration() {
+    this.generations[this.getGenerationCount()] = new Generation(
+      this.getLatestGeneration()
     );
   }
 }
 
 const TYPE = {
   DEAD: 0,
-  NORMAL: 1,
-  NEW: 2,
+  NEW: 1,
+  NORMAL: 2,
   DYING: 3,
 };
 
 // --------------
-
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -145,8 +158,30 @@ function World(props) {
   const g = props.generation;
 
   const draw = (ctx, frameCount) => {
-    ctx.clearRect(0, 0, ctx.canvas.width + 2, ctx.canvas.height + 2);
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    for (let x = 0; x < GameProperties.CELLS_X; x++) {
+      for (let y = 0; y <= GameProperties.CELLS_Y; y++) {
+        if (g.cells[x][y] !== TYPE.DEAD) {
+          ctx.beginPath();
+          if (g.cells[x][y] === TYPE.NEW) {
+            ctx.fillStyle = "#333333";
+          } else if (g.cells[x][y] === TYPE.NORMAL) {
+            ctx.fillStyle = "black";
+          } else if (g.cells[x][y] === TYPE.DYING) {
+            ctx.fillStyle = "WhiteSmoke";
+          }
+          ctx.fillRect(
+            x * props.pixelsPerCell + 1,
+            y * props.pixelsPerCell + 1,
+            props.pixelsPerCell,
+            props.pixelsPerCell
+          );
+          ctx.stroke();
+        }
+      }
+    }
     ctx.lineWidth = 1;
+    ctx.strokeStyle = "gray";
     for (let x = 0; x <= GameProperties.CELLS_X; x++) {
       ctx.beginPath();
       ctx.moveTo(x * props.pixelsPerCell + 1, 0);
@@ -159,19 +194,18 @@ function World(props) {
       ctx.lineTo(ctx.canvas.width, y * props.pixelsPerCell + 1);
       ctx.stroke();
     }
-    for (let x = 0; x < GameProperties.CELLS_X; x++) {
-      for (let y = 0; y <= GameProperties.CELLS_Y; y++) {
-        if (g.cells[x][y] === TYPE.NORMAL || g.cells[x][y] === TYPE.NEW) {
-          ctx.beginPath();
-          ctx.rect(
-            x * props.pixelsPerCell,
-            y * props.pixelsPerCell,
-            (x + 1) * props.pixelsPerCell,
-            (y + 1) * props.pixelsPerCell
-          );
-          ctx.stroke();
-        }
-      }
+  };
+
+  const clickHandler = (event) => {
+    const x = Math.floor(event.nativeEvent.offsetX / props.pixelsPerCell);
+    const y = Math.floor(event.nativeEvent.offsetY / props.pixelsPerCell);
+    if (
+      props.generation.cells[x][y] === TYPE.DEAD ||
+      props.generation.cells[x][y] === TYPE.DYING
+    ) {
+      props.generation.cells[x][y] = TYPE.NEW;
+    } else {
+      props.generation.cells[x][y] = TYPE.DYING;
     }
   };
 
@@ -180,42 +214,22 @@ function World(props) {
       draw={draw}
       width={GameProperties.CELLS_X * props.pixelsPerCell + 2}
       height={GameProperties.CELLS_Y * props.pixelsPerCell + 2}
+      onClick={props.editable ? clickHandler : ""}
     />
-  );
-}
-
-function Controller(props) {
-  const classes = useStyles();
-  const advance = props.advance;
-  return (
-    <Grid className={classes.controller} container spacing={2}>
-      <Grid item>
-        <IconButton aria-label="advance" onClick={advance}>
-          <ForwardIcon />
-        </IconButton>
-      </Grid>
-      <Grid item>
-        <Typography
-          variant="h5"
-          display="block"
-          className={classes.generation_label}
-        >
-          Generation {props.index}
-        </Typography>
-      </Grid>
-    </Grid>
   );
 }
 
 function App() {
   const classes = useStyles();
   const [game, setGame] = useState(new Game());
-  const [generation, setGeneration] = useState(game.get_latest_generation());
+  const [generation, setGeneration] = useState(game.getLatestGeneration());
 
   const advance = () => {
-    game.advance();
-    setGeneration(game.get_latest_generation());
-  }
+    game.advanceGeneration();
+    setGeneration(game.getLatestGeneration());
+  };
+
+  const [editable, setEdit] = useState(true);
 
   return (
     <div className="App">
@@ -236,11 +250,41 @@ function App() {
       </AppBar>
 
       <Card className={classes.root}>
-        <Controller index={game.get_generation_count()} advance={advance} />
-        <World generation={generation} pixelsPerCell={10} />
+        <Grid className={classes.controller} container spacing={2}>
+          <Grid item>
+            <IconButton aria-label="advance" onClick={advance}>
+              <ForwardIcon />
+            </IconButton>
+          </Grid>
+
+          <Grid item>
+          <FormGroup row>
+          <FormControlLabel
+            control={<Switch checked={editable} onChange={() => setEdit(!editable)} name="editable" />}
+            label="Edit Mode"
+          />
+          </FormGroup>
+          </Grid>
+          
+
+          <Grid item>
+            <Typography
+              variant="h6"
+              display="block"
+              className={classes.generation_label}
+            >
+              Generation {game.getGenerationCount()}
+            </Typography>
+          </Grid>
+
+
+        </Grid>
+
+        <World generation={generation} pixelsPerCell={20} editable={editable} />
       </Card>
     </div>
   );
 }
 
 export default App;
+ 
