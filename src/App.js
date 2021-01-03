@@ -12,9 +12,12 @@ import Card from "@material-ui/core/Card";
 import Container from "@material-ui/core/Container";
 import { useState } from "react";
 import EditIcon from "@material-ui/icons/Edit";
-import FormGroup from '@material-ui/core/FormGroup';
-import FormControlLabel from '@material-ui/core/FormControlLabel';
-import Switch from '@material-ui/core/Switch';
+import FormGroup from "@material-ui/core/FormGroup";
+import FormControlLabel from "@material-ui/core/FormControlLabel";
+import Switch from "@material-ui/core/Switch";
+import Slider from "@material-ui/core/Slider";
+import SkipNextIcon from '@material-ui/icons/SkipNext';
+import FastForwardIcon from '@material-ui/icons/FastForward';
 
 // fix stupid javascript modulo bug
 function mod(n, m) {
@@ -145,7 +148,9 @@ const useStyles = makeStyles((theme) => ({
     flexGrow: 1,
   },
   controller: {},
-  generation_label: {},
+  generation_label: {
+    align: "right",
+  },
   world: {
     padding: 10,
   },
@@ -163,12 +168,19 @@ function World(props) {
       for (let y = 0; y <= GameProperties.CELLS_Y; y++) {
         if (g.cells[x][y] !== TYPE.DEAD) {
           ctx.beginPath();
-          if (g.cells[x][y] === TYPE.NEW) {
-            ctx.fillStyle = "#333333";
-          } else if (g.cells[x][y] === TYPE.NORMAL) {
+          if (props.colors) {
+            if (g.cells[x][y] === TYPE.NEW) {
+              ctx.fillStyle = "#555555";
+            } else if (g.cells[x][y] === TYPE.NORMAL) {
+              ctx.fillStyle = "black";
+            } else if (g.cells[x][y] === TYPE.DYING) {
+              ctx.fillStyle = "#DDDDDD";
+            }
+          } else {
             ctx.fillStyle = "black";
-          } else if (g.cells[x][y] === TYPE.DYING) {
-            ctx.fillStyle = "WhiteSmoke";
+            if (g.cells[x][y] === TYPE.DYING) {
+              ctx.fillStyle = "#FFFFFF";
+            }
           }
           ctx.fillRect(
             x * props.pixelsPerCell + 1,
@@ -222,14 +234,42 @@ function World(props) {
 function App() {
   const classes = useStyles();
   const [game, setGame] = useState(new Game());
-  const [generation, setGeneration] = useState(game.getLatestGeneration());
 
-  const advance = () => {
+  const [state, setState] = useState({
+    editable: true,
+    colors: false,
+    running: false,
+  });
+
+  const [generationIndex, setGenerationIndex] = useState(
+    game.getGenerationCount()
+  );
+
+  const step = () => {
     game.advanceGeneration();
-    setGeneration(game.getLatestGeneration());
+    setGenerationIndex(generationIndex + 1);
   };
 
-  const [editable, setEdit] = useState(true);
+  const flipEditable = () => {
+    setState({ ...state, editable: !state.editable });
+  };
+
+  const flipColors = () => {
+    setState({ ...state, colors: !state.colors });
+  };
+
+  const handleSliderChange = (event, newValue) => {
+    setGenerationIndex(newValue);
+  };
+
+  const stop = () => {
+    setState({ ...state, running: false });
+  };
+
+  const start = () => {
+    setState({ ...state, running: true });
+    //TODO
+  };
 
   return (
     <div className="App">
@@ -246,45 +286,79 @@ function App() {
           <Typography variant="h6" className={classes.title}>
             Game Of Life
           </Typography>
+          <Typography variant="h6" className={classes.generation_label}>
+            {generationIndex}
+          </Typography>
         </Toolbar>
       </AppBar>
 
       <Card className={classes.root}>
         <Grid className={classes.controller} container spacing={2}>
           <Grid item>
-            <IconButton aria-label="advance" onClick={advance}>
-              <ForwardIcon />
-            </IconButton>
+            <Button aria-label="step" onClick={step}>
+              <SkipNextIcon />
+              Step
+            </Button>
           </Grid>
 
           <Grid item>
-          <FormGroup row>
-          <FormControlLabel
-            control={<Switch checked={editable} onChange={() => setEdit(!editable)} name="editable" />}
-            label="Edit Mode"
-          />
-          </FormGroup>
+            <Button aria-label="run" onClick={state.running ? stop : start}>
+              <FastForwardIcon />
+              {state.running ? "Stop" : "Start"}
+            </Button>
           </Grid>
-          
 
           <Grid item>
-            <Typography
-              variant="h6"
-              display="block"
-              className={classes.generation_label}
-            >
-              Generation {game.getGenerationCount()}
-            </Typography>
+            <FormGroup row>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={state.editable}
+                    onChange={flipEditable}
+                    name="editable"
+                  />
+                }
+                label="Edit Mode"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={state.colors}
+                    onChange={flipColors}
+                    name="colors"
+                  />
+                }
+                label="Colors"
+              />
+            </FormGroup>
           </Grid>
 
-
+          <Grid item xs={4}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item>
+                <Slider
+                  value={generationIndex}
+                  onChange={handleSliderChange}
+                  aria-labelledby="generation-slider"
+                  min={1}
+                  max={game.getGenerationCount()}
+                />
+              </Grid>
+              <Grid item>
+                <Typography margin="dense">{generationIndex}</Typography>
+              </Grid>
+            </Grid>
+          </Grid>
         </Grid>
 
-        <World generation={generation} pixelsPerCell={20} editable={editable} />
+        <World
+          generation={game.getGeneration(generationIndex)}
+          pixelsPerCell={20}
+          editable={state.editable}
+          colors={state.colors}
+        />
       </Card>
     </div>
   );
 }
-
 export default App;
- 
