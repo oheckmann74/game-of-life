@@ -16,8 +16,9 @@ import FormGroup from "@material-ui/core/FormGroup";
 import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Switch from "@material-ui/core/Switch";
 import Slider from "@material-ui/core/Slider";
-import SkipNextIcon from '@material-ui/icons/SkipNext';
-import FastForwardIcon from '@material-ui/icons/FastForward';
+import SkipNextIcon from "@material-ui/icons/SkipNext";
+import FastForwardIcon from "@material-ui/icons/FastForward";
+import StopIcon from "@material-ui/icons/Stop";
 
 // fix stupid javascript modulo bug
 function mod(n, m) {
@@ -27,8 +28,8 @@ function mod(n, m) {
 // ---- Here is only Game of Life Logic
 
 const GameProperties = {
-  CELLS_X: 20,
-  CELLS_Y: 20,
+  CELLS_X: 25,
+  CELLS_Y: 25,
 };
 
 class Generation {
@@ -108,22 +109,26 @@ class Generation {
 class Game {
   constructor() {
     this.generations = [];
-    this.generations[0] = new Generation();
+    this.generations.push(new Generation());
     this.generations[0].add_blinker();
   }
   getLatestGeneration() {
-    return this.getGeneration(this.getGenerationCount());
+    return this.getGeneration(this.getLatestGenerationIndex());
   }
-  getGenerationCount() {
+  getLatestGenerationIndex() {
     return this.generations.length;
   }
   getGeneration(num) {
     return this.generations[num - 1];
   }
-  advanceGeneration() {
-    this.generations[this.getGenerationCount()] = new Generation(
-      this.getLatestGeneration()
-    );
+  advanceGeneration(fromIndex = null) {
+    const from = fromIndex || this.getLatestGenerationIndex();
+    if (from !== this.getLatestGenerationIndex()) {
+      // we are advancing from not the latest generation and have to delete all other generations
+      this.generations.splice(fromIndex, this.generations.length - fromIndex);
+    }
+    this.generations.push(new Generation(this.getGeneration(from)));
+    return this.getLatestGenerationIndex();
   }
 }
 
@@ -242,12 +247,11 @@ function App() {
   });
 
   const [generationIndex, setGenerationIndex] = useState(
-    game.getGenerationCount()
+    game.getLatestGenerationIndex()
   );
 
   const step = () => {
-    game.advanceGeneration();
-    setGenerationIndex(generationIndex + 1);
+    setGenerationIndex(game.advanceGeneration(generationIndex));
   };
 
   const flipEditable = () => {
@@ -263,12 +267,16 @@ function App() {
   };
 
   const stop = () => {
-    setState({ ...state, running: false });
+    clearInterval(state.interval);
+    setState({ ...state, running: false, interval: null });
   };
 
   const start = () => {
-    setState({ ...state, running: true });
-    //TODO
+    step();
+    let interval = setInterval(() => {
+      setGenerationIndex(game.advanceGeneration());
+    }, 1000);
+    setState({ ...state, running: true, interval: interval });
   };
 
   return (
@@ -287,7 +295,7 @@ function App() {
             Game Of Life
           </Typography>
           <Typography variant="h6" className={classes.generation_label}>
-            {generationIndex}
+            Generation {generationIndex}
           </Typography>
         </Toolbar>
       </AppBar>
@@ -295,16 +303,20 @@ function App() {
       <Card className={classes.root}>
         <Grid className={classes.controller} container spacing={2}>
           <Grid item>
-            <Button aria-label="step" onClick={step}>
-              <SkipNextIcon />
-              Step
+            <Button aria-label="run" onClick={state.running ? stop : start}>
+              {state.running ? <StopIcon /> : <FastForwardIcon />}
+              {state.running ? "Stop" : "Start"}
             </Button>
           </Grid>
 
           <Grid item>
-            <Button aria-label="run" onClick={state.running ? stop : start}>
-              <FastForwardIcon />
-              {state.running ? "Stop" : "Start"}
+            <Button
+              aria-label="step"
+              onClick={step}
+              disabled={state.running ? true : false}
+            >
+              <SkipNextIcon />
+              Step
             </Button>
           </Grid>
 
@@ -332,22 +344,20 @@ function App() {
               />
             </FormGroup>
           </Grid>
+        </Grid>
 
+        <Grid container spacing={2} alignItems="center">
           <Grid item xs={4}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item>
-                <Slider
-                  value={generationIndex}
-                  onChange={handleSliderChange}
-                  aria-labelledby="generation-slider"
-                  min={1}
-                  max={game.getGenerationCount()}
-                />
-              </Grid>
-              <Grid item>
-                <Typography margin="dense">{generationIndex}</Typography>
-              </Grid>
-            </Grid>
+            <Slider
+              value={generationIndex}
+              onChange={handleSliderChange}
+              aria-labelledby="generation-slider"
+              min={1}
+              max={game.getLatestGenerationIndex()}
+            />
+          </Grid>
+          <Grid item xs={2}>
+            <Typography margin="dense">{generationIndex}</Typography>
           </Grid>
         </Grid>
 
